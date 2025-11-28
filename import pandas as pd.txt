@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics.pairwise import cosine_similarity
+
+# 1. Load dữ liệu
+df = pd.read_csv("diabetes.csv")
+
+# 2. Chuẩn hóa dữ liệu
+X = df.drop("Outcome", axis=1)
+y = df["Outcome"]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# 3. Biến đổi cosine (thêm 1 đặc trưng cosine với vector trung bình)
+mean_vector = np.mean(X_scaled, axis=0).reshape(1, -1)
+cos_feature = cosine_similarity(X_scaled, mean_vector).reshape(-1, 1)
+
+X_final = np.hstack([X_scaled, cos_feature])
+
+# 4. Chia train/test theo 80/20
+X_train, X_test, y_train, y_test = train_test_split(X_final, y, test_size=0.2, random_state=42)
+
+# 5. K-Fold
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+def evaluate_model(model, X, y):
+    acc = []
+    pre = []
+    rec = []
+    f1 = []
+
+    for train_idx, test_idx in kf.split(X):
+        X_tr, X_te = X[train_idx], X[test_idx]
+        y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+
+        model.fit(X_tr, y_tr)
+        y_pred = model.predict(X_te)
+
+        acc.append(accuracy_score(y_te, y_pred))
+        pre.append(precision_score(y_te, y_pred))
+        rec.append(recall_score(y_te, y_pred))
+        f1.append(f1_score(y_te, y_pred))
+
+    return np.mean(acc), np.mean(pre), np.mean(rec), np.mean(f1)
+
+models = {
+    "Logistic Regression": LogisticRegression(),
+    "SVM Linear": SVC(kernel="linear"),
+    "SVM RBF": SVC(kernel="rbf")
+}
+
+# 6. Kết quả
+print("=== KẾT QUẢ BÀI 1 ===")
+for name, model in models.items():
+    acc, pre, rec, f1 = evaluate_model(model, X_final, y)
+    print(f"\n{name}")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"Precision: {pre:.4f}")
+    print(f"Recall: {rec:.4f}")
+    print(f"F1-score: {f1:.4f}")
